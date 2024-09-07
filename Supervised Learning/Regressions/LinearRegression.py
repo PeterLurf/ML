@@ -32,7 +32,7 @@ class LinearRegression(torch.nn.Module):
 model = LinearRegression()
 
 loss_fn = nn.MSELoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.3)
 
 def accuracy(y_pred, y_true) -> float:
     return torch.mean(torch.abs(y_pred - y_true) / y_true).item()
@@ -63,7 +63,7 @@ def trainingLoop(epochs):
             acc = accuracy(Y_test_pred, Y_test)
             test_accuracy_list.append(acc)
 
-trainingLoop(100)
+trainingLoop(200)
 
 # Create the combined figure
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
