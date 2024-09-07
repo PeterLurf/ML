@@ -63,7 +63,7 @@ def trainingLoop(epochs):
             acc = accuracy(Y_test_pred, Y_test)
             test_accuracy_list.append(acc)
 
-trainingLoop(200)
+trainingLoop(300)
 
 # Create the combined figure
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
@@ -87,6 +87,7 @@ def init():
     """Initialize the background of the plot."""
     line.set_data([], [])
     return line,
+epoch_text = ax2.text(0.05, 0.9, '', transform=ax2.transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.6))
 
 # Update function for the animation with reset behavior
 def update(frame):
@@ -94,6 +95,7 @@ def update(frame):
     # Reset the frame index if it exceeds the length of a_values
     if frame >= len(a_values):
         frame = 0  # Reset to the first frame
+    epoch_text.set_text(f'Epoch: {frame + 1}/{len(a_values)}')  # Update epoch number in the text box
 
     a = a_values[frame]
     b = b_values[frame]
@@ -106,6 +108,6 @@ ani = FuncAnimation(fig, update, frames=len(a_values), init_func=init, blit=True
 
 # Adjust layout and spacing
 plt.tight_layout()
-
+ani.save('LinRegGif.gif', writer='pillow')
 # Show the combined figure with both the static accuracy plot and animated regression line
 plt.show()
