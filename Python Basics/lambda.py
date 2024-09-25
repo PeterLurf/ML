@@ -21,3 +21,8 @@ mytripler = myfunc(3)
 print(mydoubler(11))
 print(mytripler(11))
 
+#lambdas are useful when making custom comparators for sorting
+#example
+points2D = [(1,2),(15,1),(5,-1),(10,4)]
+points2D_sorted = sorted(points2D,key=lambda x:x[1])
+print(points2D_sorted)
