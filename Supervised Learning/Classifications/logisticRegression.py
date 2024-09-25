@@ -1,72 +1,105 @@
-import numpy as np
-import torch 
+import torch
 import torch.nn as nn
+import numpy as np
+from sklearn import datasets
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm, auto
 
-def sigmoid(z):
-    return 1 / (1 + np.exp(-z))
+# device agnostic code
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-#create dataset
-np.random.seed(0)
-X = np.random.randn(100, 2)
-w_true = np.array([0.5, -0.5])
-b_true = 0.1
-Y = (sigmoid(X @ w_true + b_true) > 0.5).astype(int)
+# 0) Prepare data
+bc = datasets.load_breast_cancer()
+X, y = bc.data, bc.target
 
-#convert to torch tensors
-X = torch.tensor(X, dtype=torch.float32)
-Y = torch.tensor(Y, dtype=torch.float32)
+n_samples, n_features = X.shape
 
-#split dataset
-split = 80
-X_train = X[:split]
-Y_train = Y[:split]
-X_test = X[split:]
-Y_test = Y[split:]
+# Use only the first two features for decision boundary plot
+X = X[:, :2]
 
-#Define the model
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
+X_train = torch.from_numpy(X_train.astype(np.float32)).to(device)
+X_test = torch.from_numpy(X_test.astype(np.float32)).to(device)
+y_train = torch.from_numpy(y_train.astype(np.float32)).to(device)
+y_test = torch.from_numpy(y_test.astype(np.float32)).to(device)
+
+y_train = y_train.view(y_train.shape[0], 1)  # reshaping the y_train tensor to a column vector
+y_test = y_test.view(y_test.shape[0], 1)  # reshaping the y_test tensor to a column vector
+
+# Logistic regression model
 class LogisticRegression(nn.Module):
-    def __init__(self):
+    def __init__(self, n_input_features):
         super(LogisticRegression, self).__init__()
-        self.linear = nn.Linear(2, 1)
+        self.linear = nn.Linear(n_input_features, 1)
 
-    def forward(self, X):
-        return torch.sigmoid(self.linear(X))
-    
-model = LogisticRegression()
+    def forward(self, x):
+        y_predicted = torch.sigmoid(self.linear(x))
+        return y_predicted
 
+model = LogisticRegression(2).to(device)  # Using only 2 features
 loss_fn = nn.BCELoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=0.3)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
 
-def accuracy(y_pred, y_true) -> float:
-    y_pred_labels = (y_pred > 0.5).float()  # Convert to float for mean calculation
-    return torch.mean((y_pred_labels == y_true).float()).item()  # Also convert the equality comparison to float
+epochs = 300
 
-for epoch in range(100):
-    model.train()
-    Y_pred = model(X_train)
+train_losses = []
+test_losses = []
+
+for epoch in tqdm(range(epochs)):
+    # Forward pass
+    y_pred = model(X_train)
+    loss = loss_fn(y_pred, y_train)
     
-    # Reshape Y_train to match the shape of Y_pred
-    Y_train_reshaped = Y_train.unsqueeze(1)
-    
-    loss = loss_fn(Y_pred, Y_train_reshaped)
-    optimizer.zero_grad()
+    # Backward pass and optimization
     loss.backward()
     optimizer.step()
+    optimizer.zero_grad()
     
-    train_accuracy = accuracy(Y_pred, Y_train_reshaped)
-    print(f'Epoch: {epoch}, Loss: {loss.item()}, Accuracy: {train_accuracy}')
+    train_losses.append(loss.item())
+    
+    # Evaluate on test data
+    with torch.inference_mode():
+        y_pred_test = model(X_test)
+        loss_test = loss_fn(y_pred_test, y_test)
+        test_losses.append(loss_test.item())
 
-# Test the model
-model.eval()
-Y_pred = model(X_test)
-test_accuracy = accuracy(Y_pred, Y_test)
-print(f'Test Accuracy: {test_accuracy}')
+# Plot train and test losses
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+ax1.plot(train_losses, label='train loss')
+ax1.plot(test_losses, label='test loss')
+ax1.legend()
 
-# Plot the decision boundary
-# Convert back to numpy for plotting
-X_numpy = X.detach().numpy()
-Y_numpy = Y.detach().numpy()
+# Plot decision boundary
+# Prepare data for plotting decision boundary
+x_min, x_max = X_train[:, 0].min().item() - 1, X_train[:, 0].max().item() + 1
+y_min, y_max = X_train[:, 1].min().item() - 1, X_train[:, 1].max().item() + 1
+xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.01),
+                     np.arange(y_min, y_max, 0.01))
 
-# Plot the decision boundary
+# Stack the grid points to create (N, 2) shape input
+grid = np.c_[xx.ravel(), yy.ravel()]
+grid_torch = torch.from_numpy(grid.astype(np.float32)).to(device)
 
+# Get model predictions for each point in the grid
+with torch.no_grad():
+    Z = model(grid_torch)
+    Z = Z.reshape(xx.shape)
+    Z = Z.cpu().numpy()  # Move to CPU and convert to NumPy array
+
+# Plot the contour and training examples
+ax2.contourf(xx, yy, Z, levels=[0, 0.5, 1], alpha=0.2, colors=['blue', 'red'])
+ax2.contour(xx, yy, Z, levels=[0.5], colors='black')  # Decision boundary at probability 0.5
+ax2.scatter(X_train[:, 0].cpu(), X_train[:, 1].cpu(), c=y_train[:, 0].cpu(), cmap=plt.cm.RdBu, edgecolors='k')
+ax2.set_xlabel('Feature 1')
+ax2.set_ylabel('Feature 2')
+ax2.set_title('Decision Boundary')
+
+plt.tight_layout()
+
+plt.show()
