@@ -2,11 +2,22 @@ import torch
 import torch
 import torch.nn as nn
 import numpy as np
+
 from sklearn import datasets
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm, auto
+
+def ElasticRegularization(model, lambda_, alpha):
+    l1_penalty = 0
+    l2_penalty = 0
+    for param in model.parameters():
+        l1_penalty += torch.sum(torch.abs(param))
+        l2_penalty += torch.sum(torch.abs(param))
+    return lambda_ * (alpha * l1_penalty + (1 - alpha) * l2_penalty)
+
+
 
 # device agnostic code
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -19,6 +30,7 @@ n_samples, n_features = X.shape
 
 # Use only the first two features for decision boundary plot
 X = X[:, :2]
+feature_names = bc.feature_names[:2]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
@@ -55,7 +67,7 @@ test_losses = []
 for epoch in tqdm(range(epochs)):
     # Forward pass
     y_pred = model(X_train)
-    loss = loss_fn(y_pred, y_train)
+    loss = loss_fn(y_pred, y_train) + ElasticRegularization(model=model,lambda_=0.01,alpha=0.5)
     
     # Backward pass and optimization
     loss.backward()
@@ -67,7 +79,7 @@ for epoch in tqdm(range(epochs)):
     # Evaluate on test data
     with torch.inference_mode():
         y_pred_test = model(X_test)
-        loss_test = loss_fn(y_pred_test, y_test)
+        loss_test = loss_fn(y_pred_test, y_test) + ElasticRegularization(model=model,lambda_=0.01,alpha=0.5)
         test_losses.append(loss_test.item())
 
 # Plot train and test losses
@@ -97,8 +109,8 @@ with torch.no_grad():
 ax2.contourf(xx, yy, Z, levels=[0, 0.5, 1], alpha=0.2, colors=['blue', 'red'])
 ax2.contour(xx, yy, Z, levels=[0.5], colors='black')  # Decision boundary at probability 0.5
 ax2.scatter(X_train[:, 0].cpu(), X_train[:, 1].cpu(), c=y_train[:, 0].cpu(), cmap=plt.cm.RdBu, edgecolors='k')
-ax2.set_xlabel('Feature 1')
-ax2.set_ylabel('Feature 2')
+ax2.set_xlabel(feature_names[0])
+ax2.set_ylabel(feature_names[1])
 ax2.set_title('Decision Boundary')
 
 plt.tight_layout()
