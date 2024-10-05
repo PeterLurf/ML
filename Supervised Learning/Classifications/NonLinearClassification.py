@@ -116,6 +116,7 @@ with torch.inference_mode():
     print(f'Accuracy: {acc.item()}')
 
 # Create and save the animation
-
+"""
 images[0].save('decision_boundary_animation.gif', save_all=True, append_images=images[1:], duration=30, loop=0)
 print(device)
+"""
